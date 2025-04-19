@@ -599,7 +599,7 @@ func (s *MinimaxMCPServer) HandleTextToImage(req *protocol.CallToolRequest) (*pr
 		params.N = 1
 	}
 	if params.ResponseFormat == "" {
-		params.ResponseFormat = "base64"
+		params.ResponseFormat = "url"
 	}
 
 	// Default to true if not specified

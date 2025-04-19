@@ -52,7 +52,7 @@ type TextToImageRequest struct {
 	AspectRatio     string `json:"aspect_ratio,omitempty" description:"The aspect ratio of the image. Values range [\"1:1\", \"16:9\",\"4:3\", \"3:2\", \"2:3\", \"3:4\", \"9:16\", \"21:9\"], with \"1:1\" being the default."`
 	N               int    `json:"n,omitempty" description:"he number of images to generate. Values range [1, 9], with 1 being the default."`
 	PromptOptimizer bool   `json:"prompt_optimizer,omitempty" description:"Whether to optimize the prompt. Values range [True, False], with True being the default."`
-	ResponseFormat  string `json:"response_format,omitempty" description:"Used to specify the image response format with base64 or url, default base64."`
+	ResponseFormat  string `json:"response_format,omitempty" description:"Used to specify the image response format with base64 or url, default url."`
 	OutputDirectory string `json:"output_directory,omitempty" description:"The directory to save the image to, option."`
 }
 
