@@ -1,0 +1,1 @@
+go build -v -o miniMaxMCPClient.exe main.go

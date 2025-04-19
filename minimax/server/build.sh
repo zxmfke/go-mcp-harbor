@@ -1,0 +1,1 @@
+go build -v -o miniMaxMCPServer.exe main.go
