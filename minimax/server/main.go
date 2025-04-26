@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"mcp/minimax/server/define"
 	"mcp/minimax/server/minimax"
 
 	"github.com/ThinkInAIXYZ/go-mcp/protocol"
@@ -28,8 +29,8 @@ func main() {
 		log.Fatalf("APIHost not set in config file")
 	}
 
-	mode := cfg.Section("Minimax").Key("Mode").String()
-	if mode != "sse" && mode != "stdio" {
+	mode := define.ServerMode(cfg.Section("Minimax").Key("Mode").String())
+	if !mode.Valid() {
 		log.Fatalf("Mode not set in config file")
 	}
 	addr := cfg.Section("Minimax").Key("Addr").String()
@@ -37,33 +38,33 @@ func main() {
 		addr = "127.0.0.1:8080"
 	}
 
-	basePath := cfg.Section("Minimax").Key("MCPBasePath").String()
 	resourceMode := cfg.Section("Minimax").Key("ResourceMode").String()
 	if resourceMode == "" {
 		resourceMode = "url" // Default value
 	}
 
 	// Create Minimax API client
-	apiClient := &minimax.MinimaxAPIClient{
+	apiClient := &minimax.APIClient{
 		APIKey:  apiKey,
 		APIHost: apiHost,
 	}
 
-	apiServer := &minimax.MinimaxMCPServer{
+	apiServer := &minimax.MCPServer{
 		Client:       apiClient,
-		BasePath:     basePath,
 		ResourceMode: resourceMode,
 	}
 
 	// Create MCP transport layer
 	var transportServer transport.ServerTransport
 	switch mode {
-	case "sse":
-
+	case define.SSE:
 		transportServer, err = transport.NewSSEServerTransport(addr)
 		if err != nil {
 			log.Fatalf("Failed to create SSE transport: %v", err)
 		}
+	case define.Streamable:
+		transportServer = transport.NewStreamableHTTPServerTransport(addr,
+			transport.WithStreamableHTTPServerTransportOptionStateMode(transport.Stateful))
 	default:
 		transportServer = transport.NewStdioServerTransport()
 	}
@@ -82,15 +83,7 @@ func main() {
 	// Register tools
 	minimax.RegisterTools(mcpServer, apiServer)
 
-	// Start server
-	switch mode {
-	case "sse":
-		log.Printf("run MiniMax MCP server with sse addr : %s", addr)
-	default:
-		log.Print("run MiniMax MCP server with stdio")
-	}
-
-	if err := mcpServer.Run(); err != nil {
+	if err = mcpServer.Run(); err != nil {
 		log.Fatalf("Failed to run server: %v", err)
 	}
 }

@@ -21,17 +21,16 @@ import (
 	"github.com/ThinkInAIXYZ/go-mcp/protocol"
 )
 
-// MinimaxMCPServer MCP server instance
-type MinimaxMCPServer struct {
-	Client       *MinimaxAPIClient
-	BasePath     string
+// MCPServer MCP server instance
+type MCPServer struct {
+	Client       *APIClient
 	ResourceMode string
 }
 
 // API method implementations
 
 // HandleTextToAudio processes text-to-speech requests, save To Local
-func (s *MinimaxMCPServer) HandleTextToAudio(req *protocol.CallToolRequest) (*protocol.CallToolResult, error) {
+func (s *MCPServer) HandleTextToAudio(req *protocol.CallToolRequest) (*protocol.CallToolResult, error) {
 	var params TextToAudioRequest
 	if err := protocol.VerifyAndUnmarshal(req.RawArguments, &params); err != nil {
 		return createTextErrorResult(fmt.Sprintf("Parameter parsing failed: %v", err)), nil
@@ -47,7 +46,7 @@ func (s *MinimaxMCPServer) HandleTextToAudio(req *protocol.CallToolRequest) (*pr
 		params.VoiceID = define.DefaultVoiceID
 	}
 	if params.Model == "" {
-		params.Model = define.DefaultSpeechModel
+		params.Model = define.DefaultT2AModel
 	}
 	if params.Speed == 0 {
 		params.Speed = define.DefaultSpeed
@@ -59,9 +58,9 @@ func (s *MinimaxMCPServer) HandleTextToAudio(req *protocol.CallToolRequest) (*pr
 	if params.Emotion == "" {
 		params.Emotion = define.DefaultEmotion
 	}
-	if params.SampleRate == 0 {
-		params.SampleRate = define.DefaultSampleRate
-	}
+
+	params.SampleRate = define.DefaultSampleRate
+
 	if params.Bitrate == 0 {
 		params.Bitrate = define.DefaultBitrate
 	}
@@ -129,16 +128,16 @@ func (s *MinimaxMCPServer) HandleTextToAudio(req *protocol.CallToolRequest) (*pr
 	}
 
 	// Save audio file
-	outputPath := storage.BuildOutputPath(params.OutputDirectory, s.BasePath)
+	outputPath := storage.BuildOutputPath()
 	outputFileName := storage.BuildOutputFile("t2a", params.Text, outputPath, params.Format)
 
 	// Ensure directory exists
-	if err := os.MkdirAll(filepath.Dir(outputFileName), 0755); err != nil {
+	if err = os.MkdirAll(filepath.Dir(outputFileName), 0755); err != nil {
 		return createTextErrorResult(fmt.Sprintf("Failed to create output directory: %v", err)), nil
 	}
 
 	// Write file
-	if err := ioutil.WriteFile(outputFileName, audioBytes, 0644); err != nil {
+	if err = os.WriteFile(outputFileName, audioBytes, 0644); err != nil {
 		return createTextErrorResult(fmt.Sprintf("Failed to save audio file: %v", err)), nil
 	}
 
@@ -146,7 +145,7 @@ func (s *MinimaxMCPServer) HandleTextToAudio(req *protocol.CallToolRequest) (*pr
 }
 
 // HandleListVoices processes list voices requests
-func (s *MinimaxMCPServer) HandleListVoices(req *protocol.CallToolRequest) (*protocol.CallToolResult, error) {
+func (s *MCPServer) HandleListVoices(req *protocol.CallToolRequest) (*protocol.CallToolResult, error) {
 	var params ListVoicesRequest
 	if err := protocol.VerifyAndUnmarshal(req.RawArguments, &params); err != nil {
 		return createTextErrorResult(fmt.Sprintf("Parameter parsing failed: %v", err)), nil
@@ -214,7 +213,7 @@ func (s *MinimaxMCPServer) HandleListVoices(req *protocol.CallToolRequest) (*pro
 }
 
 // HandleVoiceClone processes voice cloning requests
-func (s *MinimaxMCPServer) HandleVoiceClone(req *protocol.CallToolRequest) (*protocol.CallToolResult, error) {
+func (s *MCPServer) HandleVoiceClone(req *protocol.CallToolRequest) (*protocol.CallToolResult, error) {
 	var params VoiceCloneRequest
 	if err := protocol.VerifyAndUnmarshal(req.RawArguments, &params); err != nil {
 		return createTextErrorResult(fmt.Sprintf("Parameter parsing failed: %v", err)), nil
@@ -230,8 +229,11 @@ func (s *MinimaxMCPServer) HandleVoiceClone(req *protocol.CallToolRequest) (*pro
 	if params.Text == "" {
 		return createTextErrorResult("The text parameter must be provided"), nil
 	}
+	//if params.Model == "" {
+	//	params.Model = define.DefaultVCModel
+	//}
 
-	var fileID string
+	var fileID int64
 	var err error
 
 	// Step 1: Upload file
@@ -248,7 +250,7 @@ func (s *MinimaxMCPServer) HandleVoiceClone(req *protocol.CallToolRequest) (*pro
 		}
 
 		// Create temporary file
-		tempFile, err := ioutil.TempFile("", "voice_clone_*.mp3")
+		tempFile, err := os.CreateTemp("", "voice_clone_*.mp3")
 		if err != nil {
 			return createTextErrorResult(fmt.Sprintf("Failed to create temporary file: %v", err)), nil
 		}
@@ -256,7 +258,7 @@ func (s *MinimaxMCPServer) HandleVoiceClone(req *protocol.CallToolRequest) (*pro
 		defer tempFile.Close()
 
 		// Write content to temporary file
-		bodyBytes, err := ioutil.ReadAll(resp.Body)
+		bodyBytes, err := io.ReadAll(resp.Body)
 		if err != nil {
 			return createTextErrorResult(fmt.Sprintf("Failed to read response: %v", err)), nil
 		}
@@ -283,11 +285,6 @@ func (s *MinimaxMCPServer) HandleVoiceClone(req *protocol.CallToolRequest) (*pro
 		}
 	}
 
-	// Check fileID
-	if fileID == "" {
-		return createTextErrorResult("File upload failed, fileID not obtained"), nil
-	}
-
 	// Step 2: Clone voice
 	payload := map[string]interface{}{
 		"file_id":  fileID,
@@ -296,7 +293,7 @@ func (s *MinimaxMCPServer) HandleVoiceClone(req *protocol.CallToolRequest) (*pro
 
 	if params.Text != "" {
 		payload["text"] = params.Text
-		payload["model"] = define.DefaultSpeechModel
+		payload["model"] = define.DefaultVCModel
 	}
 
 	response, err := s.Client.Post("/v1/voice_clone", payload)
@@ -333,27 +330,41 @@ func (s *MinimaxMCPServer) HandleVoiceClone(req *protocol.CallToolRequest) (*pro
 	}
 
 	// Save demo audio file
-	outputPath := storage.BuildOutputPath(params.OutputDirectory, s.BasePath)
+	outputPath := storage.BuildOutputPath()
 	outputFileName := storage.BuildOutputFile("voice_clone", params.Text, outputPath, "wav")
 
 	// Ensure directory exists
-	if err := os.MkdirAll(filepath.Dir(outputFileName), 0755); err != nil {
+	if err = os.MkdirAll(filepath.Dir(outputFileName), 0755); err != nil {
 		return createTextErrorResult(fmt.Sprintf("Failed to create output directory: %v", err)), nil
 	}
 
 	// Write file
-	if err := os.WriteFile(outputFileName, audioBytes, 0644); err != nil {
+	if err = os.WriteFile(outputFileName, audioBytes, 0644); err != nil {
 		return createTextErrorResult(fmt.Sprintf("Failed to save audio file: %v", err)), nil
 	}
 
 	return createTextResult(fmt.Sprintf("Voice cloning successful: Voice ID: %s, demo audio saved as: %s", params.VoiceID, outputFileName)), nil
 }
 
+type UploadResp struct {
+	File struct {
+		FileId    int64  `json:"file_id"`
+		Bytes     int    `json:"bytes"`
+		CreatedAt int    `json:"created_at"`
+		Filename  string `json:"filename"`
+		Purpose   string `json:"purpose"`
+	} `json:"file"`
+	BaseResp struct {
+		StatusCode int    `json:"status_code"`
+		StatusMsg  string `json:"status_msg"`
+	} `json:"base_resp"`
+}
+
 // uploadFile uploads a file to the MiniMax API
-func (s *MinimaxMCPServer) uploadFile(filePath string) (string, error) {
+func (s *MCPServer) uploadFile(filePath string) (int64, error) {
 	file, err := os.Open(filePath)
 	if err != nil {
-		return "", fmt.Errorf("failed to open file: %v", err)
+		return 0, fmt.Errorf("failed to open file: %v", err)
 	}
 	defer file.Close()
 
@@ -364,27 +375,27 @@ func (s *MinimaxMCPServer) uploadFile(filePath string) (string, error) {
 	// Add file
 	part, err := writer.CreateFormFile("file", filepath.Base(filePath))
 	if err != nil {
-		return "", fmt.Errorf("failed to create form file: %v", err)
+		return 0, fmt.Errorf("failed to create form file: %v", err)
 	}
 
-	if _, err := io.Copy(part, file); err != nil {
-		return "", fmt.Errorf("failed to copy file content: %v", err)
+	if _, err = io.Copy(part, file); err != nil {
+		return 0, fmt.Errorf("failed to copy file content: %v", err)
 	}
 
 	// Add purpose field
-	if err := writer.WriteField("purpose", "voice_clone"); err != nil {
-		return "", fmt.Errorf("failed to add purpose field: %v", err)
+	if err = writer.WriteField("purpose", "voice_clone"); err != nil {
+		return 0, fmt.Errorf("failed to add purpose field: %v", err)
 	}
 
-	if err := writer.Close(); err != nil {
-		return "", fmt.Errorf("failed to close writer: %v", err)
+	if err = writer.Close(); err != nil {
+		return 0, fmt.Errorf("failed to close writer: %v", err)
 	}
 
 	// Create request
 	url := fmt.Sprintf("%s/v1/files/upload", s.Client.APIHost)
 	req, err := http.NewRequest("POST", url, body)
 	if err != nil {
-		return "", fmt.Errorf("failed to create request: %v", err)
+		return 0, fmt.Errorf("failed to create request: %v", err)
 	}
 
 	req.Header.Set("Content-Type", writer.FormDataContentType())
@@ -397,37 +408,33 @@ func (s *MinimaxMCPServer) uploadFile(filePath string) (string, error) {
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("failed to send request: %v", err)
+		return 0, fmt.Errorf("failed to send request: %v", err)
 	}
 	defer resp.Body.Close()
 
+	bodyBytes, _ := io.ReadAll(resp.Body)
+
 	if resp.StatusCode != http.StatusOK {
-		bodyBytes, _ := ioutil.ReadAll(resp.Body)
-		return "", fmt.Errorf("API request error (status code: %d): %s", resp.StatusCode, string(bodyBytes))
+		return 0, fmt.Errorf("API request error (status code: %d): %s", resp.StatusCode, string(bodyBytes))
 	}
+
+	log.Printf("%s", bodyBytes)
 
 	// Parse response
-	var result map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return "", fmt.Errorf("response parsing failed: %v", err)
+	var result = new(UploadResp)
+	if err = json.Unmarshal(bodyBytes, result); err != nil {
+		return 0, fmt.Errorf("response parsing failed: %v", err)
 	}
 
-	// Get file_id
-	fileObj, ok := result["file"].(map[string]interface{})
-	if !ok {
-		return "", fmt.Errorf("unable to get file field from response")
+	if result.BaseResp.StatusCode != 0 {
+		return 0, fmt.Errorf("API request error (status code: %d): %s", result.BaseResp.StatusCode, string(bodyBytes))
 	}
 
-	fileID, ok := fileObj["file_id"].(string)
-	if !ok || fileID == "" {
-		return "", fmt.Errorf("unable to get file_id from response")
-	}
-
-	return fileID, nil
+	return result.File.FileId, nil
 }
 
 // HandleGenerateVideo processes video generation requests
-func (s *MinimaxMCPServer) HandleGenerateVideo(req *protocol.CallToolRequest) (*protocol.CallToolResult, error) {
+func (s *MCPServer) HandleGenerateVideo(req *protocol.CallToolRequest) (*protocol.CallToolResult, error) {
 	var params GenerateVideoRequest
 	if err := protocol.VerifyAndUnmarshal(req.RawArguments, &params); err != nil {
 		return createTextErrorResult(fmt.Sprintf("Parameter parsing failed: %v", err)), nil
@@ -560,7 +567,7 @@ func (s *MinimaxMCPServer) HandleGenerateVideo(req *protocol.CallToolRequest) (*
 	}
 
 	// Save video file
-	outputPath := storage.BuildOutputPath(params.OutputDirectory, s.BasePath)
+	outputPath := storage.BuildOutputPath()
 	outputFileName := storage.BuildOutputFile("video", taskID, outputPath, "mp4")
 
 	// Ensure directory exists
@@ -577,7 +584,7 @@ func (s *MinimaxMCPServer) HandleGenerateVideo(req *protocol.CallToolRequest) (*
 }
 
 // HandleTextToImage processes text-to-image requests
-func (s *MinimaxMCPServer) HandleTextToImage(req *protocol.CallToolRequest) (*protocol.CallToolResult, error) {
+func (s *MCPServer) HandleTextToImage(req *protocol.CallToolRequest) (*protocol.CallToolResult, error) {
 	var params TextToImageRequest
 	if err := protocol.VerifyAndUnmarshal(req.RawArguments, &params); err != nil {
 		return createTextErrorResult(fmt.Sprintf("Parameter parsing failed: %v", err)), nil
@@ -631,11 +638,6 @@ func (s *MinimaxMCPServer) HandleTextToImage(req *protocol.CallToolRequest) (*pr
 		return createTextErrorResult("Invalid API response format: missing data field"), nil
 	}
 
-	// Return different results based on resource mode
-	//if s.ResourceMode == define.ResourceModeURL {
-	//	return createTextResult(fmt.Sprintf("Success. Image URLs: %v", imageURLs)), nil
-	//}
-
 	switch params.ResponseFormat {
 	case "base64":
 		return textToImageResultWithImageContent(data)
@@ -644,6 +646,7 @@ func (s *MinimaxMCPServer) HandleTextToImage(req *protocol.CallToolRequest) (*pr
 		if !ok || len(imageURLs) == 0 {
 			return createTextErrorResult("No images generated"), nil
 		}
+		_, _ = textToImageResultWithTextContent(storage.BuildOutputPath(), params.Prompt, imageURLs)
 		return createTextResult(fmt.Sprintf("Success. Image URLs: %v", imageURLs)), nil
 	}
 }
@@ -664,7 +667,8 @@ func textToImageResultWithTextContent(outputPath, prompt string, imageURLs []int
 		if len(truncatedPrompt) > 50 {
 			truncatedPrompt = truncatedPrompt[:50]
 		}
-		outputFileName := storage.BuildOutputFile("image", fmt.Sprintf("%d_%s", i, truncatedPrompt), outputPath, "jpeg")
+
+		outputFileName := storage.BuildOutputFile("t2i", fmt.Sprintf("%d_%s", i, truncatedPrompt), outputPath, "jpeg")
 
 		// Ensure directory exists
 		if err := os.MkdirAll(filepath.Dir(outputFileName), 0755); err != nil {
@@ -689,7 +693,7 @@ func textToImageResultWithTextContent(outputPath, prompt string, imageURLs []int
 		}
 
 		// Write file
-		if err := os.WriteFile(outputFileName, imageBytes, 0644); err != nil {
+		if err = os.WriteFile(outputFileName, imageBytes, 0644); err != nil {
 			return createTextErrorResult(fmt.Sprintf("Failed to save image file: %v", err)), nil
 		}
 

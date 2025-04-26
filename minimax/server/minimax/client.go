@@ -10,24 +10,24 @@ import (
 	"time"
 )
 
-// MinimaxAPIError API error structure
-type MinimaxAPIError struct {
+// APIError API error structure
+type APIError struct {
 	StatusCode int
 	Message    string
 }
 
-func (e *MinimaxAPIError) Error() string {
+func (e *APIError) Error() string {
 	return fmt.Sprintf("MinimaxAPI error (status code: %d): %s", e.StatusCode, e.Message)
 }
 
-// MinimaxAPIClient encapsulates Minimax API calls
-type MinimaxAPIClient struct {
+// APIClient encapsulates Minimax API calls
+type APIClient struct {
 	APIKey  string
 	APIHost string
 }
 
 // Post sends a POST request to the MiniMax API
-func (c *MinimaxAPIClient) Post(endpoint string, jsonData interface{}) (map[string]interface{}, error) {
+func (c *APIClient) Post(endpoint string, jsonData interface{}) (map[string]interface{}, error) {
 	url := fmt.Sprintf("%s%s", c.APIHost, endpoint)
 
 	jsonBytes, err := json.Marshal(jsonData)
@@ -55,7 +55,7 @@ func (c *MinimaxAPIClient) Post(endpoint string, jsonData interface{}) (map[stri
 
 	if resp.StatusCode != http.StatusOK {
 		bodyBytes, _ := io.ReadAll(resp.Body)
-		return nil, &MinimaxAPIError{
+		return nil, &APIError{
 			StatusCode: resp.StatusCode,
 			Message:    string(bodyBytes),
 		}
@@ -81,7 +81,7 @@ func (c *MinimaxAPIClient) Post(endpoint string, jsonData interface{}) (map[stri
 }
 
 // Get sends a GET request to the MiniMax API
-func (c *MinimaxAPIClient) Get(endpoint string) (map[string]interface{}, error) {
+func (c *APIClient) Get(endpoint string) (map[string]interface{}, error) {
 	url := fmt.Sprintf("%s%s", c.APIHost, endpoint)
 
 	req, err := http.NewRequest("GET", url, nil)
@@ -103,7 +103,7 @@ func (c *MinimaxAPIClient) Get(endpoint string) (map[string]interface{}, error) 
 
 	if resp.StatusCode != http.StatusOK {
 		bodyBytes, _ := ioutil.ReadAll(resp.Body)
-		return nil, &MinimaxAPIError{
+		return nil, &APIError{
 			StatusCode: resp.StatusCode,
 			Message:    string(bodyBytes),
 		}

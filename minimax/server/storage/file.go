@@ -9,21 +9,12 @@ import (
 )
 
 // BuildOutputPath constructs the output path
-func BuildOutputPath(outputDirectory string, basePath string) string {
-	if outputDirectory != "" {
-		return outputDirectory
-	}
-
-	if basePath != "" {
-		return basePath
-	}
-
-	// Default to user's desktop
+func BuildOutputPath() string {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return os.TempDir()
 	}
-	return filepath.Join(homeDir, "Desktop")
+	return filepath.Join(homeDir, ".go-mcp-server", ".minimax-mcp-server")
 }
 
 // BuildOutputFile constructs the output file name
