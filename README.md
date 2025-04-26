@@ -6,3 +6,8 @@ This is a harbor for developing different MCP servers and clients using the [go-
 
 - Gaode 高德 mcp client
 - MiniMax 海螺 mcp server and mcp client
+
+  - text to audio【√】
+  - text to image【√】
+  - voice clone【√】
+  - text to video【x】
